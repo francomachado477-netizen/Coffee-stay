@@ -11,7 +11,6 @@ function publicClient() {
   );
 }
 
-// Validación de seguridad: solo se guardarán ratings enteros entre 1 y 5
 const reviewInput = z.object({
   rating: z.number().int().min(1).max(5),
 });
