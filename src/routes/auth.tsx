@@ -39,8 +39,9 @@ function AuthPage() {
       });
       if (signInErr) throw signInErr;
       navigate({ to: "/admin" });
-    } catch {
-      setError("Incorrect password.");
+    } catch (err: any) {
+      // DEPURACIÓN: Muestra el mensaje de error real del servidor en pantalla
+      setError(err instanceof Error ? err.message : (err?.message || "Invalid credentials"));
     } finally {
       setLoading(false);
     }
@@ -82,4 +83,4 @@ function AuthPage() {
       </div>
     </div>
   );
-}
+          }
