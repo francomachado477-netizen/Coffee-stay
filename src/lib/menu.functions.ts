@@ -1,18 +1,16 @@
 import { createServerFn } from "@tanstack/react-start";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 function publicClient() {
-  return createClient<Database>(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_PUBLISHABLE_KEY!,
-    { auth: { storage: undefined, persistSession: false, autoRefreshToken: false } },
-  );
+  return createClient<Database>(process.env.SUPABASE_URL!, process.env.SUPABASE_PUBLISHABLE_KEY!, {
+    auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
+  });
 }
 
-async function assertAdmin(supabase: any, userId: string) {
+async function assertAdmin(supabase: SupabaseClient<Database>, userId: string) {
   const { data, error } = await supabase
     .from("user_roles")
     .select("role")
@@ -34,7 +32,6 @@ export const listMenu = createServerFn({ method: "GET" }).handler(async () => {
   return data ?? [];
 });
 
-
 export const listAllMenu = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -53,7 +50,7 @@ const menuInput = z.object({
   description: z.string().max(500).default(""),
   price: z.number().min(0).max(9999),
   sort_order: z.number().int().min(0).max(9999).default(0),
-  image_url: z.string().max(2000).optional().nullable(),
+  image_url: z.string().url().max(2000).optional().nullable(),
   out_of_stock: z.boolean().optional().default(false),
 });
 
@@ -71,18 +68,24 @@ export const upsertMenuItem = createServerFn({ method: "POST" })
       out_of_stock: data.out_of_stock ?? false,
     };
     if (data.id) {
-      const { error } = await context.supabase
+      const { data: saved, error } = await context.supabase
         .from("menu_items")
         .update(payload)
-        .eq("id", data.id);
+        .eq("id", data.id)
+        .select("*")
+        .single();
       if (error) throw new Error(error.message);
-    } else {
-      const { error } = await context.supabase.from("menu_items").insert(payload);
-      if (error) throw new Error(error.message);
+      return saved;
     }
-    return { ok: true };
-  });
 
+    const { data: saved, error } = await context.supabase
+      .from("menu_items")
+      .insert(payload)
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+    return saved;
+  });
 
 const idInput = z.object({ id: z.string().uuid() });
 

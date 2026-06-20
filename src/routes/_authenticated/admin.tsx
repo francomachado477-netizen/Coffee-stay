@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, redirect } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,14 +18,13 @@ import {
   restoreReservation,
   hardDeleteReservation,
 } from "@/lib/reservations.functions";
+import { listReviewsAdmin } from "@/lib/reviews.functions";
+import { getAdminStats } from "@/lib/stats.functions";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   ssr: false,
   head: () => ({
-    meta: [
-      { title: "Admin — Coffee Stay" },
-      { name: "robots", content: "noindex" },
-    ],
+    meta: [{ title: "Admin — Coffee Stay" }, { name: "robots", content: "noindex" }],
   }),
   beforeLoad: async () => {
     const { data, error } = await supabase.auth.getUser();
@@ -89,8 +88,12 @@ function AdminPage() {
       <header className="border-b border-border">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5 md:px-10">
           <div className="flex items-baseline gap-3">
-            <a href="/" className="font-display text-xl">Coffee Stay</a>
-            <span className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground">Admin</span>
+            <a href="/" className="font-display text-xl">
+              Coffee Stay
+            </a>
+            <span className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
+              Admin
+            </span>
           </div>
           <button
             onClick={signOut}
@@ -144,26 +147,39 @@ function MenuPanel() {
   const fetchAll = useServerFn(listAllMenu);
   const upsert = useServerFn(upsertMenuItem);
   const softDel = useServerFn(softDeleteMenu);
+  const [showForm, setShowForm] = useState(false);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const q = useQuery({
     queryKey: ["admin", "menu"],
     queryFn: () => fetchAll({}) as Promise<MenuRow[]>,
   });
-  const refresh = () => q.refetch();
   const active = (q.data ?? []).filter((m) => !m.deleted_at);
 
   const onSave = async (row: Partial<MenuRow> & { name: string; price: number }) => {
-    await upsert({
-      data: {
-        id: row.id,
-        name: row.name,
-        description: row.description ?? "",
-        price: Number(row.price),
-        sort_order: Number(row.sort_order ?? 0),
-        image_url: row.image_url ?? null,
-        out_of_stock: !!row.out_of_stock,
-      },
-    });
-    refresh();
+    setMessage(null);
+    try {
+      const saved = await upsert({
+        data: {
+          id: row.id,
+          name: row.name.trim(),
+          description: row.description?.trim() ?? "",
+          price: Number(row.price),
+          sort_order: Number(row.sort_order ?? 0),
+          image_url: row.image_url?.trim() || null,
+          out_of_stock: !!row.out_of_stock,
+        },
+      });
+      await q.refetch();
+      setMessage({
+        type: "success",
+        text: row.id ? "Product updated in Supabase." : "Product created in Supabase.",
+      });
+      return saved;
+    } catch (err) {
+      const text = err instanceof Error ? err.message : "Could not save product.";
+      setMessage({ type: "error", text });
+      throw err;
+    }
   };
 
   return (
@@ -171,22 +187,38 @@ function MenuPanel() {
       <div className="flex items-end justify-between mb-6">
         <h2 className="font-display text-3xl">Menu</h2>
         <button
-          onClick={() =>
-            onSave({
-              name: "New item",
-              description: "",
-              price: 0,
-              sort_order: active.length + 1,
-              image_url: null,
-              out_of_stock: false,
-            })
-          }
+          onClick={() => setShowForm((v) => !v)}
           className="rounded-full bg-foreground px-5 py-2.5 text-xs uppercase tracking-[0.18em] text-background hover:bg-accent"
         >
-          + Add item
+          {showForm ? "Close" : "+ Add item"}
         </button>
       </div>
+      {message && (
+        <p
+          className={`mb-4 text-sm ${message.type === "success" ? "text-emerald-700" : "text-red-600"}`}
+        >
+          {message.text}
+        </p>
+      )}
+      {q.isError && (
+        <p className="mb-4 text-sm text-red-600">
+          {q.error instanceof Error ? q.error.message : "Could not load menu."}
+        </p>
+      )}
+      {showForm && (
+        <MenuItemForm
+          nextOrder={active.length + 1}
+          onCancel={() => setShowForm(false)}
+          onCreate={async (row) => {
+            await onSave(row);
+            setShowForm(false);
+          }}
+        />
+      )}
       {q.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+      {!q.isLoading && active.length === 0 && (
+        <p className="text-sm text-muted-foreground">No active products.</p>
+      )}
       <div className="space-y-3">
         {active.map((item) => (
           <MenuRowEditor
@@ -195,13 +227,128 @@ function MenuPanel() {
             onSave={onSave}
             onDelete={async () => {
               if (!confirm(`Move "${item.name}" to trash?`)) return;
-              await softDel({ data: { id: item.id } });
-              refresh();
+              try {
+                await softDel({ data: { id: item.id } });
+                await q.refetch();
+                setMessage({ type: "success", text: "Product moved to trash." });
+              } catch (err) {
+                setMessage({
+                  type: "error",
+                  text: err instanceof Error ? err.message : "Could not delete product.",
+                });
+              }
             }}
           />
         ))}
       </div>
     </section>
+  );
+}
+
+function MenuItemForm({
+  nextOrder,
+  onCreate,
+  onCancel,
+}: {
+  nextOrder: number;
+  onCreate: (row: Partial<MenuRow> & { name: string; price: number }) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [price, setPrice] = useState("");
+  const [sort, setSort] = useState(String(nextOrder));
+  const [imageUrl, setImageUrl] = useState("");
+  const [outOfStock, setOutOfStock] = useState(false);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError("");
+    const priceNum = Number(price);
+    if (!name.trim()) return setError("Name is required.");
+    if (!Number.isFinite(priceNum) || priceNum <= 0)
+      return setError("Price must be greater than zero.");
+    if (imageUrl && !/^https?:\/\//i.test(imageUrl))
+      return setError("Image URL must start with http:// or https://.");
+    setSaving(true);
+    try {
+      await onCreate({
+        name,
+        description,
+        price: priceNum,
+        sort_order: Number(sort || 0),
+        image_url: imageUrl || null,
+        out_of_stock: outOfStock,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create product.");
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <form
+      onSubmit={submit}
+      className="mb-6 grid grid-cols-12 gap-3 rounded border border-border bg-card p-4"
+    >
+      <input
+        className="col-span-12 md:col-span-3 border-b border-border bg-transparent py-1 text-sm outline-none"
+        placeholder="Name *"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+      />
+      <input
+        className="col-span-12 md:col-span-4 border-b border-border bg-transparent py-1 text-sm outline-none"
+        placeholder="Description"
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+      />
+      <input
+        className="col-span-6 md:col-span-1 border-b border-border bg-transparent py-1 text-sm outline-none"
+        placeholder="Price *"
+        inputMode="decimal"
+        value={price}
+        onChange={(e) => setPrice(e.target.value)}
+      />
+      <input
+        className="col-span-6 md:col-span-1 border-b border-border bg-transparent py-1 text-sm outline-none"
+        placeholder="Order"
+        inputMode="numeric"
+        value={sort}
+        onChange={(e) => setSort(e.target.value)}
+      />
+      <input
+        className="col-span-12 md:col-span-3 border-b border-border bg-transparent py-1 text-sm outline-none"
+        placeholder="Image URL"
+        value={imageUrl}
+        onChange={(e) => setImageUrl(e.target.value)}
+      />
+      <label className="col-span-12 flex items-center gap-2 text-xs uppercase tracking-[0.15em]">
+        <input
+          type="checkbox"
+          checked={outOfStock}
+          onChange={(e) => setOutOfStock(e.target.checked)}
+        />
+        No stock
+      </label>
+      {error && <p className="col-span-12 text-sm text-red-600">{error}</p>}
+      <div className="col-span-12 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-full border border-border px-4 py-2 text-xs uppercase tracking-[0.15em]"
+        >
+          Cancel
+        </button>
+        <button
+          disabled={saving}
+          className="rounded-full bg-foreground px-4 py-2 text-xs uppercase tracking-[0.15em] text-background disabled:opacity-60"
+        >
+          {saving ? "Saving…" : "Save item"}
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -211,7 +358,7 @@ function MenuRowEditor({
   onDelete,
 }: {
   item: MenuRow;
-  onSave: (row: MenuRow) => Promise<void>;
+  onSave: (row: MenuRow) => Promise<unknown>;
   onDelete: () => Promise<void>;
 }) {
   const [name, setName] = useState(item.name);
@@ -220,8 +367,10 @@ function MenuRowEditor({
   const [sortStr, setSortStr] = useState(String(item.sort_order));
   const [imageUrl, setImageUrl] = useState(item.image_url ?? "");
   const [outOfStock, setOutOfStock] = useState(!!item.out_of_stock);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  const priceNum = priceStr === "" || priceStr === "." ? 0 : Number(priceStr);
+  const priceNum = priceStr === "" || priceStr === "." ? Number.NaN : Number(priceStr);
   const sortNum = sortStr === "" ? 0 : Number(sortStr);
   const dirty =
     name !== item.name ||
@@ -230,6 +379,32 @@ function MenuRowEditor({
     sortNum !== Number(item.sort_order) ||
     imageUrl !== (item.image_url ?? "") ||
     outOfStock !== !!item.out_of_stock;
+
+  const save = async () => {
+    setError("");
+    if (!name.trim()) return setError("Name is required.");
+    if (!Number.isFinite(priceNum) || priceNum <= 0)
+      return setError("Price must be greater than zero.");
+    if (imageUrl && !/^https?:\/\//i.test(imageUrl)) {
+      return setError("Image URL must start with http:// or https://.");
+    }
+    setSaving(true);
+    try {
+      await onSave({
+        ...item,
+        name,
+        description,
+        price: priceNum,
+        sort_order: sortNum,
+        image_url: imageUrl || null,
+        out_of_stock: outOfStock,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save product.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="grid grid-cols-12 gap-3 rounded border border-border p-4 items-start">
@@ -292,23 +467,14 @@ function MenuRowEditor({
           />
           No stock
         </label>
+        {error && <p className="col-span-12 text-sm text-red-600">{error}</p>}
         <div className="col-span-12 flex gap-2 justify-end">
           <button
-            disabled={!dirty}
-            onClick={() =>
-              onSave({
-                ...item,
-                name,
-                description,
-                price: priceNum,
-                sort_order: sortNum,
-                image_url: imageUrl || null,
-                out_of_stock: outOfStock,
-              })
-            }
+            disabled={!dirty || saving}
+            onClick={save}
             className="rounded-full bg-foreground px-3 py-1.5 text-[11px] uppercase tracking-[0.15em] text-background disabled:opacity-40"
           >
-            Save
+            {saving ? "Saving…" : "Save"}
           </button>
           <button
             onClick={onDelete}
@@ -417,7 +583,9 @@ function ReservationsPanel() {
                 <div className="flex gap-2">
                   {r.status !== "approved" && (
                     <button
-                      onClick={() => act(r.id, () => setStatus({ data: { id: r.id, status: "approved" } }))}
+                      onClick={() =>
+                        act(r.id, () => setStatus({ data: { id: r.id, status: "approved" } }))
+                      }
                       className="rounded-full bg-foreground px-3 py-1.5 text-[11px] uppercase tracking-[0.15em] text-background"
                     >
                       Approve
@@ -425,7 +593,9 @@ function ReservationsPanel() {
                   )}
                   {r.status !== "cancelled" && (
                     <button
-                      onClick={() => act(r.id, () => setStatus({ data: { id: r.id, status: "cancelled" } }))}
+                      onClick={() =>
+                        act(r.id, () => setStatus({ data: { id: r.id, status: "cancelled" } }))
+                      }
                       className="rounded-full border border-border px-3 py-1.5 text-[11px] uppercase tracking-[0.15em]"
                     >
                       Cancel
@@ -457,7 +627,9 @@ function StatusBadge({ status }: { status: Reservation["status"] }) {
     cancelled: "bg-stone-200 text-stone-700",
   };
   return (
-    <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] ${map[status]}`}>
+    <span
+      className={`inline-flex rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] ${map[status]}`}
+    >
       {status}
     </span>
   );
@@ -465,66 +637,35 @@ function StatusBadge({ status }: { status: Reservation["status"] }) {
 
 // ───────────── Stats ─────────────
 
-type Evt = {
-  id: string;
-  event_type: string;
-  target_id: string | null;
-  target_label: string | null;
-  created_at: string;
+type ChartPoint = { label: string; value: number };
+
+type AdminStats = {
+  totalReservations: number;
+  reservationsByDay: ChartPoint[];
+  reservationsByWeek: ChartPoint[];
+  reservationsByMonth: ChartPoint[];
+  estimatedRevenue: number;
+  topProducts: { label: string; count: number; estimatedRevenue: number }[];
+  requestedHours: ChartPoint[];
+  occupancyRate: number;
+  reviewCount: number;
+  averageRating: number;
+  recentEvents: {
+    id: string;
+    event_type: string;
+    target_label: string | null;
+    created_at: string;
+  }[];
 };
 
 function StatsPanel() {
   const [range, setRange] = useState<"24h" | "7d" | "30d" | "all">("7d");
-  const evtQ = useQuery({
-    queryKey: ["admin", "events", range],
-    queryFn: async () => {
-      let q = supabase.from("analytics_events").select("*").order("created_at", { ascending: false }).limit(5000);
-      const since = rangeSince(range);
-      if (since) q = q.gte("created_at", since);
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []) as Evt[];
-    },
+  const fetchStats = useServerFn(getAdminStats);
+  const q = useQuery({
+    queryKey: ["admin", "stats", range],
+    queryFn: () => fetchStats({ data: { range } }) as Promise<AdminStats>,
   });
-  const resQ = useQuery({
-    queryKey: ["admin", "res-for-stats", range],
-    queryFn: async () => {
-      let q = supabase.from("reservations").select("id, created_at, date, time").is("deleted_at", null);
-      const since = rangeSince(range);
-      if (since) q = q.gte("created_at", since);
-      const { data, error } = await q;
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-
-  const events = evtQ.data ?? [];
-  const counts = useMemo(() => {
-    const c: Record<string, number> = {};
-    for (const e of events) c[e.event_type] = (c[e.event_type] ?? 0) + 1;
-    return c;
-  }, [events]);
-
-  const topMenu = useMemo(() => {
-    const m: Record<string, { label: string; n: number; last: string }> = {};
-    for (const e of events) {
-      if (e.event_type !== "click_menu_item") continue;
-      const key = e.target_id ?? e.target_label ?? "unknown";
-      if (!m[key]) m[key] = { label: e.target_label ?? "Unknown", n: 0, last: e.created_at };
-      m[key].n++;
-      if (e.created_at > m[key].last) m[key].last = e.created_at;
-    }
-    return Object.values(m).sort((a, b) => b.n - a.n).slice(0, 10);
-  }, [events]);
-
-  const resByHour = useMemo(() => {
-    const buckets: Record<number, number> = {};
-    for (const r of resQ.data ?? []) {
-      const h = Number((r.time as string).slice(0, 2));
-      buckets[h] = (buckets[h] ?? 0) + 1;
-    }
-    return buckets;
-  }, [resQ.data]);
+  const stats = q.data;
 
   return (
     <section>
@@ -535,105 +676,120 @@ function StatsPanel() {
             <button
               key={r}
               onClick={() => setRange(r)}
-              className={`rounded-full px-3 py-1.5 uppercase tracking-[0.15em] border ${
-                range === r
-                  ? "bg-foreground text-background border-foreground"
-                  : "border-border text-muted-foreground hover:text-foreground"
-              }`}
+              className={`rounded-full px-3 py-1.5 uppercase tracking-[0.15em] border ${range === r ? "bg-foreground text-background border-foreground" : "border-border text-muted-foreground hover:text-foreground"}`}
             >
               {r}
             </button>
           ))}
         </div>
       </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-        <StatCard label="Page views" value={counts.page_view ?? 0} />
-        <StatCard label="WhatsApp clicks" value={counts.click_whatsapp ?? 0} />
-        <StatCard label="Instagram clicks" value={counts.click_instagram ?? 0} />
-        <StatCard label="Menu item clicks" value={counts.click_menu_item ?? 0} />
-        <StatCard label="Reservations" value={(resQ.data ?? []).length} />
-        <StatCard label="Reviews submitted" value={counts.review_submitted ?? 0} />
-      </div>
-
-      <div className="grid gap-10 md:grid-cols-2">
-        <div>
-          <h3 className="font-display text-xl mb-3">Most consulted menu items</h3>
-          {topMenu.length === 0 && <p className="text-sm text-muted-foreground">No data yet.</p>}
-          <ul className="space-y-2">
-            {topMenu.map((m) => (
-              <li key={m.label} className="flex items-center justify-between rounded border border-border px-3 py-2 text-sm">
-                <div>
-                  <p className="font-medium">{m.label}</p>
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                    last {new Date(m.last).toLocaleString()}
-                  </p>
-                </div>
-                <span className="font-display text-lg">{m.n}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div>
-          <h3 className="font-display text-xl mb-3">Reservations by booked hour</h3>
-          {Object.keys(resByHour).length === 0 && (
-            <p className="text-sm text-muted-foreground">No reservations in range.</p>
-          )}
-          <div className="space-y-1">
-            {Array.from({ length: 24 }, (_, h) => h)
-              .filter((h) => resByHour[h])
-              .map((h) => {
-                const n = resByHour[h];
-                const max = Math.max(...Object.values(resByHour));
-                const pct = Math.round((n / max) * 100);
-                return (
-                  <div key={h} className="flex items-center gap-3 text-sm">
-                    <span className="w-12 text-muted-foreground">{String(h).padStart(2, "0")}:00</span>
-                    <div className="h-3 flex-1 rounded bg-muted overflow-hidden">
-                      <div className="h-full bg-foreground" style={{ width: `${pct}%` }} />
-                    </div>
-                    <span className="w-8 text-right font-display">{n}</span>
-                  </div>
-                );
-              })}
+      {q.isLoading && (
+        <p className="text-sm text-muted-foreground">Loading statistics from Supabase…</p>
+      )}
+      {q.isError && (
+        <p className="text-sm text-red-600">
+          {q.error instanceof Error ? q.error.message : "Could not load statistics."}
+        </p>
+      )}
+      {stats && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-10">
+            <StatCard label="Total reservations" value={stats.totalReservations} />
+            <StatCard label="Estimated revenue" value={`$${stats.estimatedRevenue.toFixed(2)}`} />
+            <StatCard label="Occupancy rate" value={`${stats.occupancyRate}%`} />
+            <StatCard label="Reviews" value={stats.reviewCount} />
+            <StatCard label="Average rating" value={stats.averageRating || "—"} />
           </div>
-        </div>
-      </div>
-
-      <div className="mt-10">
-        <h3 className="font-display text-xl mb-3">Recent events</h3>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="text-left text-[10px] uppercase tracking-[0.18em] text-muted-foreground border-b border-border">
-                <th className="py-2 pr-4">When</th>
-                <th className="py-2 pr-4">Event</th>
-                <th className="py-2 pr-4">Detail</th>
-              </tr>
-            </thead>
-            <tbody>
-              {events.slice(0, 50).map((e) => (
-                <tr key={e.id} className="border-b border-border/50">
-                  <td className="py-2 pr-4 text-muted-foreground">{new Date(e.created_at).toLocaleString()}</td>
-                  <td className="py-2 pr-4">{e.event_type}</td>
-                  <td className="py-2 pr-4">{e.target_label ?? ""}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+          <div className="grid gap-8 md:grid-cols-2">
+            <BarList
+              title="Reservations by day"
+              data={stats.reservationsByDay}
+              empty="No reservations in this range."
+            />
+            <BarList
+              title="Reservations by week"
+              data={stats.reservationsByWeek}
+              empty="No weekly reservation data."
+            />
+            <BarList
+              title="Reservations by month"
+              data={stats.reservationsByMonth}
+              empty="No monthly reservation data."
+            />
+            <BarList
+              title="Most requested hours"
+              data={stats.requestedHours}
+              empty="No requested hours yet."
+            />
+            <div>
+              <h3 className="font-display text-xl mb-3">Most reserved products</h3>
+              {stats.topProducts.length === 0 && (
+                <p className="text-sm text-muted-foreground">No menu interactions recorded yet.</p>
+              )}
+              <ul className="space-y-2">
+                {stats.topProducts.map((m) => (
+                  <li
+                    key={m.label}
+                    className="flex items-center justify-between rounded border border-border px-3 py-2 text-sm"
+                  >
+                    <span>{m.label}</span>
+                    <span className="font-display">{m.count}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          <div className="mt-10">
+            <h3 className="font-display text-xl mb-3">Recent analytics events</h3>
+            {stats.recentEvents.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No events in this range.</p>
+            ) : (
+              <table className="min-w-full text-sm">
+                <tbody>
+                  {stats.recentEvents.map((e) => (
+                    <tr key={e.id} className="border-b border-border/50">
+                      <td className="py-2 pr-4 text-muted-foreground">
+                        {new Date(e.created_at).toLocaleString()}
+                      </td>
+                      <td className="py-2 pr-4">{e.event_type}</td>
+                      <td className="py-2 pr-4">{e.target_label ?? ""}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </>
+      )}
     </section>
   );
 }
 
-function rangeSince(r: "24h" | "7d" | "30d" | "all"): string | null {
-  if (r === "all") return null;
-  const ms = r === "24h" ? 86400e3 : r === "7d" ? 7 * 86400e3 : 30 * 86400e3;
-  return new Date(Date.now() - ms).toISOString();
+function BarList({ title, data, empty }: { title: string; data: ChartPoint[]; empty: string }) {
+  const max = Math.max(1, ...data.map((d) => d.value));
+  return (
+    <div>
+      <h3 className="font-display text-xl mb-3">{title}</h3>
+      {data.length === 0 && <p className="text-sm text-muted-foreground">{empty}</p>}
+      <div className="space-y-2">
+        {data.map((d) => (
+          <div key={d.label} className="flex items-center gap-3 text-sm">
+            <span className="w-28 truncate text-muted-foreground">{d.label}</span>
+            <div className="h-3 flex-1 rounded bg-muted overflow-hidden">
+              <div
+                className="h-full bg-foreground"
+                style={{ width: `${(d.value / max) * 100}%` }}
+              />
+            </div>
+            <span className="w-8 text-right font-display">{d.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
-function StatCard({ label, value }: { label: string; value: number }) {
+function StatCard({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="rounded border border-border p-4">
       <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
@@ -644,57 +800,67 @@ function StatCard({ label, value }: { label: string; value: number }) {
 
 // ───────────── Reviews ─────────────
 
+type ReviewRow = {
+  id: string;
+  customer_name: string;
+  comment: string;
+  rating: number;
+  created_at: string;
+};
+
 function ReviewsPanel() {
+  const fetchReviews = useServerFn(listReviewsAdmin);
   const q = useQuery({
     queryKey: ["admin", "reviews"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("reviews")
-        .select("id, rating, created_at")
-        .order("created_at", { ascending: false })
-        .limit(500);
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => fetchReviews({}) as Promise<ReviewRow[]>,
   });
   const items = q.data ?? [];
-  const avg = items.length ? items.reduce((s, r) => s + r.rating, 0) / items.length : 0;
+  const avg = items.length
+    ? items.reduce((sum, review) => sum + review.rating, 0) / items.length
+    : 0;
   const dist: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-  items.forEach((r) => (dist[r.rating]++));
+  items.forEach((r) => dist[r.rating]++);
 
   return (
     <section>
       <h2 className="font-display text-3xl mb-6">Reviews</h2>
+      {q.isLoading && (
+        <p className="text-sm text-muted-foreground">Loading reviews from Supabase…</p>
+      )}
+      {q.isError && (
+        <p className="text-sm text-red-600">
+          {q.error instanceof Error ? q.error.message : "Could not load reviews."}
+        </p>
+      )}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
         <StatCard label="Total reviews" value={items.length} />
-        <StatCard label="Average rating" value={Number(avg.toFixed(2))} />
+        <StatCard label="Average rating" value={items.length ? avg.toFixed(2) : "—"} />
         <StatCard label="5-star reviews" value={dist[5]} />
       </div>
-      <div className="space-y-2">
-        {[5, 4, 3, 2, 1].map((s) => (
-          <div key={s} className="flex items-center gap-3 text-sm">
-            <span className="w-12">{s} ★</span>
-            <div className="h-3 flex-1 rounded bg-muted overflow-hidden">
-              <div
-                className="h-full bg-foreground"
-                style={{ width: `${items.length ? (dist[s] / items.length) * 100 : 0}%` }}
-              />
-            </div>
-            <span className="w-8 text-right font-display">{dist[s]}</span>
-          </div>
-        ))}
-      </div>
+      <BarList
+        title="Rating distribution"
+        data={[5, 4, 3, 2, 1].map((s) => ({ label: `${s} ★`, value: dist[s] }))}
+        empty="No reviews yet."
+      />
       <h3 className="font-display text-xl mt-8 mb-3">Recent</h3>
       <ul className="space-y-2">
         {items.slice(0, 50).map((r) => (
-          <li key={r.id} className="flex items-center justify-between rounded border border-border px-3 py-2 text-sm">
-            <span>{"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}</span>
-            <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-              {new Date(r.created_at).toLocaleString()}
-            </span>
+          <li key={r.id} className="rounded border border-border px-3 py-3 text-sm">
+            <div className="flex items-center justify-between gap-4">
+              <span>
+                {"★".repeat(r.rating)}
+                {"☆".repeat(5 - r.rating)} · {r.customer_name}
+              </span>
+              <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                {new Date(r.created_at).toLocaleString()}
+              </span>
+            </div>
+            <p className="mt-2 text-muted-foreground">{r.comment}</p>
           </li>
         ))}
-        {items.length === 0 && <p className="text-sm text-muted-foreground">No reviews yet.</p>}
+        {items.length === 0 && !q.isLoading && (
+          <p className="text-sm text-muted-foreground">No reviews yet.</p>
+        )}
       </ul>
     </section>
   );
@@ -747,7 +913,12 @@ function SettingsPanel() {
     <section className="max-w-2xl">
       <h2 className="font-display text-3xl mb-6">Site settings</h2>
       <div className="space-y-5">
-        <Setting label="Instagram URL" value={ig} onChange={setIg} placeholder="https://instagram.com/yourshop" />
+        <Setting
+          label="Instagram URL"
+          value={ig}
+          onChange={setIg}
+          placeholder="https://instagram.com/yourshop"
+        />
         <Setting
           label="WhatsApp URL"
           value={wa}
@@ -829,7 +1000,9 @@ function TrashPanel() {
             <div key={m.id} className="rounded border border-border p-3 text-sm">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-medium">{m.name} — ${Number(m.price).toFixed(2)}</p>
+                  <p className="font-medium">
+                    {m.name} — ${Number(m.price).toFixed(2)}
+                  </p>
                   <p className="text-xs text-muted-foreground">{m.description}</p>
                 </div>
                 <div className="flex gap-2 shrink-0">
@@ -866,9 +1039,13 @@ function TrashPanel() {
             <div key={r.id} className="rounded border border-border p-3 text-sm">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-medium">{r.name} · {r.guests}p</p>
+                  <p className="font-medium">
+                    {r.name} · {r.guests}p
+                  </p>
                   <p className="text-xs text-muted-foreground">{r.whatsapp || r.email}</p>
-                  <p className="text-xs">{r.date} {r.time.slice(0, 5)} · {r.status}</p>
+                  <p className="text-xs">
+                    {r.date} {r.time.slice(0, 5)} · {r.status}
+                  </p>
                 </div>
                 <div className="flex gap-2 shrink-0">
                   <button

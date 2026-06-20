@@ -8,7 +8,7 @@ import pour from "@/assets/pour.jpg";
 import shop from "@/assets/shop.jpg";
 import beans from "@/assets/beans.jpg";
 import { createReservation } from "@/lib/reservations.functions";
-import { submitReview } from "@/lib/reviews.functions";
+import { listPublicReviews, submitReview } from "@/lib/reviews.functions";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -108,9 +108,7 @@ function Nav({ scrolled }: { scrolled: boolean }) {
   return (
     <header
       className={`fixed inset-x-0 top-0 z-50 transition-all duration-500 ${
-        scrolled
-          ? "bg-background/85 backdrop-blur-md border-b border-border/60"
-          : "bg-transparent"
+        scrolled ? "bg-background/85 backdrop-blur-md border-b border-border/60" : "bg-transparent"
       }`}
     >
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5 md:px-10">
@@ -127,10 +125,7 @@ function Nav({ scrolled }: { scrolled: boolean }) {
             ["Visit", "#visit"],
           ].map(([label, href]) => (
             <li key={href}>
-              <a
-                href={href}
-                className="text-foreground/70 transition hover:text-foreground"
-              >
+              <a href={href} className="text-foreground/70 transition hover:text-foreground">
                 {label}
               </a>
             </li>
@@ -141,7 +136,9 @@ function Nav({ scrolled }: { scrolled: boolean }) {
           className="group inline-flex items-center gap-2 rounded-full bg-foreground px-5 py-2.5 text-xs font-medium uppercase tracking-[0.18em] text-background transition hover:bg-accent"
         >
           Reserve
-          <span aria-hidden className="transition group-hover:translate-x-0.5">→</span>
+          <span aria-hidden className="transition group-hover:translate-x-0.5">
+            →
+          </span>
         </a>
       </nav>
     </header>
@@ -191,9 +188,8 @@ function Hero() {
             Stay a while.
           </h1>
           <p className="reveal mt-8 max-w-md text-base leading-relaxed text-cream/85 md:text-lg">
-            Coffee Stay is twelve seats, one espresso machine, and a barista who
-            remembers your name by Thursday. We pour single-origin coffee for
-            people who'd rather sit than scroll.
+            Coffee Stay is twelve seats, one espresso machine, and a barista who remembers your name
+            by Thursday. We pour single-origin coffee for people who'd rather sit than scroll.
           </p>
           <div className="reveal mt-10 flex flex-wrap items-center gap-4">
             <a
@@ -201,7 +197,9 @@ function Hero() {
               className="group inline-flex items-center gap-3 rounded-full bg-cream px-7 py-4 text-sm font-medium text-espresso transition hover:bg-accent hover:text-cream"
             >
               Reserve a table
-              <span aria-hidden className="transition group-hover:translate-x-1">→</span>
+              <span aria-hidden className="transition group-hover:translate-x-1">
+                →
+              </span>
             </a>
             <a
               href="#menu"
@@ -285,8 +283,8 @@ function Menu() {
             </h2>
           </div>
           <p className="max-w-sm text-muted-foreground">
-            A short menu, on purpose. Everything we serve, we drink ourselves —
-            usually twice before opening.
+            A short menu, on purpose. Everything we serve, we drink ourselves — usually twice before
+            opening.
           </p>
         </div>
 
@@ -370,10 +368,7 @@ function MenuList({
 
 function Story() {
   return (
-    <section
-      id="story"
-      className="relative isolate overflow-hidden py-28 text-cream md:py-40"
-    >
+    <section id="story" className="relative isolate overflow-hidden py-28 text-cream md:py-40">
       <img
         src={shop}
         alt="Interior of Coffee Stay, warm light through tall window, single person reading"
@@ -400,13 +395,12 @@ function Story() {
           </h2>
           <div className="reveal mt-8 max-w-2xl space-y-5 text-base leading-relaxed text-cream/85 md:text-lg">
             <p>
-              The hooks for the suits are still in the wall. We hang aprons on
-              them now. The light comes in from one window on the east side and
-              we set the machines up to chase it.
+              The hooks for the suits are still in the wall. We hang aprons on them now. The light
+              comes in from one window on the east side and we set the machines up to chase it.
             </p>
             <p>
-              We work with two roasters we like — a small one in Lisbon, a
-              smaller one upstate — and rotate beans every couple of weeks.
+              We work with two roasters we like — a small one in Lisbon, a smaller one upstate — and
+              rotate beans every couple of weeks.
             </p>
           </div>
         </div>
@@ -437,8 +431,7 @@ function Visit() {
             Pull up a <span className="italic text-accent">chair</span>.
           </h2>
           <p className="reveal mt-6 max-w-sm text-muted-foreground">
-            Walk-ins always welcome. Tables hold for ten minutes after your
-            reserved time.
+            Walk-ins always welcome. Tables hold for ten minutes after your reserved time.
           </p>
           <dl className="reveal mt-12 space-y-6">
             <div>
@@ -512,9 +505,7 @@ function ReservationForm() {
       <div className="grain relative flex h-full min-h-[460px] flex-col items-start justify-between rounded-sm border border-border bg-card p-8 md:p-12">
         <p className="text-xs uppercase tracking-[0.3em] text-accent">Confirmed</p>
         <div>
-          <h3 className="font-display text-4xl leading-tight md:text-5xl">
-            See you soon.
-          </h3>
+          <h3 className="font-display text-4xl leading-tight md:text-5xl">See you soon.</h3>
           <p className="mt-4 max-w-md text-muted-foreground">{confirmation}</p>
         </div>
         <button
@@ -536,12 +527,24 @@ function ReservationForm() {
       <p className="mb-2 text-xs uppercase tracking-[0.3em] text-muted-foreground">
         Reserve a table
       </p>
-      <h3 className="mb-8 font-display text-3xl md:text-4xl">
-        Save a seat by the window.
-      </h3>
+      <h3 className="mb-8 font-display text-3xl md:text-4xl">Save a seat by the window.</h3>
       <div className="grid gap-5 md:grid-cols-2">
-        <Field label="Name" name="name" type="text" placeholder="Your name" required maxLength={120} />
-        <Field label="WhatsApp Number" name="whatsapp" type="tel" placeholder="+1 555 123 4567" required maxLength={50} />
+        <Field
+          label="Name"
+          name="name"
+          type="text"
+          placeholder="Your name"
+          required
+          maxLength={120}
+        />
+        <Field
+          label="WhatsApp Number"
+          name="whatsapp"
+          type="tel"
+          placeholder="+1 555 123 4567"
+          required
+          maxLength={50}
+        />
         <Field label="Date" name="date" type="date" required />
         <Field label="Time" name="time" type="time" defaultValue="09:00" required />
         <div className="md:col-span-2">
@@ -580,7 +583,9 @@ function ReservationForm() {
         className="group mt-10 inline-flex w-full items-center justify-center gap-3 rounded-full bg-foreground px-8 py-4 text-sm font-medium uppercase tracking-[0.18em] text-background transition hover:bg-accent disabled:opacity-60 md:w-auto"
       >
         {status === "submitting" ? "Saving…" : "Confirm reservation"}
-        <span aria-hidden className="transition group-hover:translate-x-1">→</span>
+        <span aria-hidden className="transition group-hover:translate-x-1">
+          →
+        </span>
       </button>
       {errorMsg && <p className="mt-3 text-xs text-red-600">{errorMsg}</p>}
       <p className="mt-4 text-xs text-muted-foreground">
@@ -613,68 +618,138 @@ function Field({
   );
 }
 
+type PublicReview = {
+  id: string;
+  customer_name: string;
+  comment: string;
+  rating: number;
+  created_at: string;
+};
+
 function ReviewWidget() {
   const { data: settings } = useSettings();
   const [rating, setRating] = useState(0);
   const [hover, setHover] = useState(0);
-  const [submitted, setSubmitted] = useState(false);
+  const [name, setName] = useState("");
+  const [comment, setComment] = useState("");
+  const [status, setStatus] = useState<"idle" | "saving" | "success">("idle");
+  const [error, setError] = useState("");
   const sendReview = useServerFn(submitReview);
+  const fetchReviews = useServerFn(listPublicReviews);
+  const reviewsQ = useQuery({
+    queryKey: ["public", "reviews"],
+    queryFn: () => fetchReviews({}) as Promise<PublicReview[]>,
+  });
   const mapsUrl = settings?.google_maps_url || "";
+  const reviews = reviewsQ.data ?? [];
+  const average = reviews.length
+    ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length
+    : 0;
 
-  const submit = async (value: number) => {
-    setRating(value);
-    setSubmitted(true);
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (rating < 1) return setError("Please select a rating from 1 to 5 stars.");
+    if (!name.trim()) return setError("Please enter your name.");
+    if (!comment.trim()) return setError("Please write a short comment.");
+    setStatus("saving");
     try {
-      await sendReview({ data: { rating: value } });
-      track("review_submitted", null, String(value));
-    } catch {
-      // ignore
+      await sendReview({ data: { customer_name: name, comment, rating } });
+      track("review_submitted", null, String(rating));
+      setStatus("success");
+      setName("");
+      setComment("");
+      setRating(0);
+      await reviewsQ.refetch();
+    } catch (err) {
+      setStatus("idle");
+      setError(err instanceof Error ? err.message : "Network error: could not save your review.");
     }
   };
 
   return (
     <div className="w-full rounded-sm border border-border bg-card p-6 md:p-8">
-      <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Rate your visit</p>
-      <h3 className="mt-2 font-display text-2xl md:text-3xl">How was your stay?</h3>
-      <div className="mt-4 flex items-center gap-2">
-        {[1, 2, 3, 4, 5].map((v) => {
-          const active = (hover || rating) >= v;
-          return (
-            <button
-              key={v}
-              type="button"
-              onMouseEnter={() => setHover(v)}
-              onMouseLeave={() => setHover(0)}
-              onClick={() => submit(v)}
-              aria-label={`${v} star${v > 1 ? "s" : ""}`}
-              className={`text-3xl transition ${active ? "text-accent" : "text-muted-foreground/40"}`}
-            >
-              ★
-            </button>
-          );
-        })}
-      </div>
-      {submitted && rating >= 4 && (
-        <div className="mt-4 text-sm">
-          <p className="text-foreground">Thank you — we'd love it if you shared a kind word.</p>
-          {mapsUrl ? (
-            <a
-              href={mapsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-2 inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-xs uppercase tracking-[0.18em] text-background hover:bg-accent"
-            >
-              Leave a Google review →
-            </a>
-          ) : (
-            <p className="mt-2 text-xs text-muted-foreground">Google review link coming soon.</p>
-          )}
+      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+        <div>
+          <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
+            Rate your visit
+          </p>
+          <h3 className="mt-2 font-display text-2xl md:text-3xl">How was your stay?</h3>
         </div>
+        <div className="text-sm text-muted-foreground">
+          <span className="font-display text-2xl text-foreground">
+            {reviews.length ? average.toFixed(1) : "—"}
+          </span>{" "}
+          / 5 · {reviews.length} {reviews.length === 1 ? "review" : "reviews"}
+        </div>
+      </div>
+      <form onSubmit={submit} className="mt-5 grid gap-4">
+        <div className="flex items-center gap-2">
+          {[1, 2, 3, 4, 5].map((v) => {
+            const active = (hover || rating) >= v;
+            return (
+              <button
+                key={v}
+                type="button"
+                onMouseEnter={() => setHover(v)}
+                onMouseLeave={() => setHover(0)}
+                onClick={() => setRating(v)}
+                aria-label={`${v} star${v > 1 ? "s" : ""}`}
+                className={`text-3xl transition ${active ? "text-accent" : "text-muted-foreground/40"}`}
+              >
+                ★
+              </button>
+            );
+          })}
+        </div>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={120}
+          placeholder="Your name"
+          className="border-0 border-b border-border bg-transparent py-2 text-base outline-none transition focus:border-foreground"
+        />
+        <textarea
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          maxLength={1000}
+          rows={3}
+          placeholder="Tell us what stood out"
+          className="resize-none border-0 border-b border-border bg-transparent py-2 text-base outline-none transition focus:border-foreground"
+        />
+        <button
+          disabled={status === "saving"}
+          className="inline-flex w-full items-center justify-center rounded-full bg-foreground px-6 py-3 text-xs uppercase tracking-[0.18em] text-background transition hover:bg-accent disabled:opacity-60 md:w-fit"
+        >
+          {status === "saving" ? "Publishing…" : "Publish review"}
+        </button>
+      </form>
+      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+      {status === "success" && (
+        <p className="mt-3 text-sm text-emerald-700">Thank you — your review was saved.</p>
       )}
-      {submitted && rating > 0 && rating < 4 && (
-        <p className="mt-4 text-sm text-muted-foreground">
-          Thank you for the honest feedback — we'll do better next time.
-        </p>
+      {status === "success" && mapsUrl && (
+        <a
+          href={mapsUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-xs uppercase tracking-[0.18em] hover:border-foreground"
+        >
+          Leave a Google review →
+        </a>
+      )}
+      {reviews.length > 0 && (
+        <div className="mt-6 space-y-3">
+          {reviews.slice(0, 3).map((review) => (
+            <article key={review.id} className="border-t border-border pt-3 text-sm">
+              <p className="font-medium">
+                {"★".repeat(review.rating)}
+                {"☆".repeat(5 - review.rating)} · {review.customer_name}
+              </p>
+              <p className="mt-1 text-muted-foreground">{review.comment}</p>
+            </article>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -697,7 +772,7 @@ function FloatingSocial() {
           className="flex h-12 w-12 items-center justify-center rounded-full bg-[#25D366] text-white shadow-lg transition hover:scale-105"
         >
           <svg viewBox="0 0 24 24" className="h-6 w-6 fill-current" aria-hidden>
-            <path d="M20.5 3.5A11.8 11.8 0 0012.05 0C5.5 0 .2 5.3.2 11.85c0 2.1.55 4.15 1.6 5.95L0 24l6.35-1.65a11.85 11.85 0 005.7 1.45h.01c6.55 0 11.85-5.3 11.85-11.85 0-3.15-1.25-6.15-3.4-8.45zm-8.45 18.2h-.01a9.85 9.85 0 01-5-1.35l-.35-.2-3.75.95.95-3.65-.25-.4a9.85 9.85 0 01-1.5-5.2c0-5.45 4.45-9.9 9.95-9.9 2.65 0 5.15 1.05 7 2.9a9.85 9.85 0 012.9 7c0 5.45-4.45 9.85-9.95 9.85zm5.45-7.4c-.3-.15-1.75-.85-2-.95-.3-.1-.45-.15-.65.15-.2.3-.75.95-.9 1.15-.2.15-.35.2-.65.05-1.75-.9-2.9-1.55-4.05-3.5-.3-.55.3-.5.9-1.7.1-.2.05-.35-.05-.5s-.65-1.6-.9-2.2c-.25-.55-.5-.5-.65-.5h-.55c-.2 0-.5.05-.75.35-.25.3-1 1-1 2.4s1.05 2.8 1.2 3c.15.2 2 3.1 4.95 4.35 1.85.8 2.55.85 3.45.7.55-.05 1.75-.7 2-1.4.25-.7.25-1.3.15-1.4-.1-.1-.3-.15-.6-.3z"/>
+            <path d="M20.5 3.5A11.8 11.8 0 0012.05 0C5.5 0 .2 5.3.2 11.85c0 2.1.55 4.15 1.6 5.95L0 24l6.35-1.65a11.85 11.85 0 005.7 1.45h.01c6.55 0 11.85-5.3 11.85-11.85 0-3.15-1.25-6.15-3.4-8.45zm-8.45 18.2h-.01a9.85 9.85 0 01-5-1.35l-.35-.2-3.75.95.95-3.65-.25-.4a9.85 9.85 0 01-1.5-5.2c0-5.45 4.45-9.9 9.95-9.9 2.65 0 5.15 1.05 7 2.9a9.85 9.85 0 012.9 7c0 5.45-4.45 9.85-9.95 9.85zm5.45-7.4c-.3-.15-1.75-.85-2-.95-.3-.1-.45-.15-.65.15-.2.3-.75.95-.9 1.15-.2.15-.35.2-.65.05-1.75-.9-2.9-1.55-4.05-3.5-.3-.55.3-.5.9-1.7.1-.2.05-.35-.05-.5s-.65-1.6-.9-2.2c-.25-.55-.5-.5-.65-.5h-.55c-.2 0-.5.05-.75.35-.25.3-1 1-1 2.4s1.05 2.8 1.2 3c.15.2 2 3.1 4.95 4.35 1.85.8 2.55.85 3.45.7.55-.05 1.75-.7 2-1.4.25-.7.25-1.3.15-1.4-.1-.1-.3-.15-.6-.3z" />
           </svg>
         </a>
       )}
@@ -712,7 +787,7 @@ function FloatingSocial() {
           style={{ background: "linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)" }}
         >
           <svg viewBox="0 0 24 24" className="h-6 w-6 fill-current" aria-hidden>
-            <path d="M12 2.2c3.2 0 3.6 0 4.85.07 1.17.05 1.8.25 2.23.42.56.22.96.48 1.38.9.42.42.68.82.9 1.38.17.43.37 1.06.42 2.23.06 1.25.07 1.65.07 4.85s0 3.6-.07 4.85c-.05 1.17-.25 1.8-.42 2.23-.22.56-.48.96-.9 1.38-.42.42-.82.68-1.38.9-.43.17-1.06.37-2.23.42-1.25.06-1.65.07-4.85.07s-3.6 0-4.85-.07c-1.17-.05-1.8-.25-2.23-.42a3.7 3.7 0 01-1.38-.9 3.7 3.7 0 01-.9-1.38c-.17-.43-.37-1.06-.42-2.23C2.2 15.6 2.2 15.2 2.2 12s0-3.6.07-4.85c.05-1.17.25-1.8.42-2.23.22-.56.48-.96.9-1.38.42-.42.82-.68 1.38-.9.43-.17 1.06-.37 2.23-.42C8.4 2.2 8.8 2.2 12 2.2zm0 1.8c-3.16 0-3.53.01-4.77.07-.95.04-1.46.2-1.8.34-.45.18-.78.39-1.12.73-.34.34-.55.67-.73 1.12-.13.34-.3.85-.34 1.8-.06 1.24-.07 1.6-.07 4.77s.01 3.53.07 4.77c.04.95.2 1.46.34 1.8.18.45.39.78.73 1.12.34.34.67.55 1.12.73.34.13.85.3 1.8.34 1.24.06 1.6.07 4.77.07s3.53-.01 4.77-.07c.95-.04 1.46-.2 1.8-.34.45-.18.78-.39 1.12-.73.34-.34.55-.67.73-1.12.13-.34.3-.85.34-1.8.06-1.24.07-1.6.07-4.77s-.01-3.53-.07-4.77c-.04-.95-.2-1.46-.34-1.8a3 3 0 00-.73-1.12 3 3 0 00-1.12-.73c-.34-.13-.85-.3-1.8-.34C15.53 4.01 15.16 4 12 4zm0 3.04a4.96 4.96 0 110 9.92 4.96 4.96 0 010-9.92zm0 1.8a3.16 3.16 0 100 6.32 3.16 3.16 0 000-6.32zm5.16-2a1.16 1.16 0 110 2.33 1.16 1.16 0 010-2.33z"/>
+            <path d="M12 2.2c3.2 0 3.6 0 4.85.07 1.17.05 1.8.25 2.23.42.56.22.96.48 1.38.9.42.42.68.82.9 1.38.17.43.37 1.06.42 2.23.06 1.25.07 1.65.07 4.85s0 3.6-.07 4.85c-.05 1.17-.25 1.8-.42 2.23-.22.56-.48.96-.9 1.38-.42.42-.82.68-1.38.9-.43.17-1.06.37-2.23.42-1.25.06-1.65.07-4.85.07s-3.6 0-4.85-.07c-1.17-.05-1.8-.25-2.23-.42a3.7 3.7 0 01-1.38-.9 3.7 3.7 0 01-.9-1.38c-.17-.43-.37-1.06-.42-2.23C2.2 15.6 2.2 15.2 2.2 12s0-3.6.07-4.85c.05-1.17.25-1.8.42-2.23.22-.56.48-.96.9-1.38.42-.42.82-.68 1.38-.9.43-.17 1.06-.37 2.23-.42C8.4 2.2 8.8 2.2 12 2.2zm0 1.8c-3.16 0-3.53.01-4.77.07-.95.04-1.46.2-1.8.34-.45.18-.78.39-1.12.73-.34.34-.55.67-.73 1.12-.13.34-.3.85-.34 1.8-.06 1.24-.07 1.6-.07 4.77s.01 3.53.07 4.77c.04.95.2 1.46.34 1.8.18.45.39.78.73 1.12.34.34.67.55 1.12.73.34.13.85.3 1.8.34 1.24.06 1.6.07 4.77.07s3.53-.01 4.77-.07c.95-.04 1.46-.2 1.8-.34.45-.18.78-.39 1.12-.73.34-.34.55-.67.73-1.12.13-.34.3-.85.34-1.8.06-1.24.07-1.6.07-4.77s-.01-3.53-.07-4.77c-.04-.95-.2-1.46-.34-1.8a3 3 0 00-.73-1.12 3 3 0 00-1.12-.73c-.34-.13-.85-.3-1.8-.34C15.53 4.01 15.16 4 12 4zm0 3.04a4.96 4.96 0 110 9.92 4.96 4.96 0 010-9.92zm0 1.8a3.16 3.16 0 100 6.32 3.16 3.16 0 000-6.32zm5.16-2a1.16 1.16 0 110 2.33 1.16 1.16 0 010-2.33z" />
           </svg>
         </a>
       )}
@@ -731,9 +806,15 @@ function Footer() {
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-6 text-sm text-muted-foreground">
-          <a href="#menu" className="transition hover:text-foreground">Menu</a>
-          <a href="#story" className="transition hover:text-foreground">Story</a>
-          <a href="#visit" className="transition hover:text-foreground">Visit</a>
+          <a href="#menu" className="transition hover:text-foreground">
+            Menu
+          </a>
+          <a href="#story" className="transition hover:text-foreground">
+            Story
+          </a>
+          <a href="#visit" className="transition hover:text-foreground">
+            Visit
+          </a>
           <a
             href="/admin"
             className="inline-flex items-center gap-2 rounded-full border border-foreground/80 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.2em] text-foreground transition hover:bg-foreground hover:text-background"
