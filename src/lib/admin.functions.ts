@@ -15,6 +15,12 @@ export const adminLogin = createServerFn({ method: "POST" })
     if (!input || typeof input.password !== "string") {
       throw new Error("Password required");
     }
+    
+    // CORRECCIÓN: Límite estricto de caracteres para evitar saturación de memoria (DoS)
+    if (input.password.length > 100) {
+      throw new Error("Password is too long");
+    }
+    
     return { password: input.password };
   })
   .handler(async ({ data }) => {
