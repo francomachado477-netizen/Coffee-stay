@@ -8,6 +8,7 @@ import pour from "@/assets/pour.jpg";
 import shop from "@/assets/shop.jpg";
 import beans from "@/assets/beans.jpg";
 import { createReservation } from "@/lib/reservations.functions";
+import { submitReview } from "@/lib/reviews.functions";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -539,8 +540,8 @@ function ReservationForm() {
         Save a seat by the window.
       </h3>
       <div className="grid gap-5 md:grid-cols-2">
-        <Field label="Name" name="name" type="text" placeholder="Your name" required />
-        <Field label="WhatsApp Number" name="whatsapp" type="tel" placeholder="+1 555 123 4567" required />
+        <Field label="Name" name="name" type="text" placeholder="Your name" required maxLength={120} />
+        <Field label="WhatsApp Number" name="whatsapp" type="tel" placeholder="+1 555 123 4567" required maxLength={50} />
         <Field label="Date" name="date" type="date" required />
         <Field label="Time" name="time" type="time" defaultValue="09:00" required />
         <div className="md:col-span-2">
@@ -555,195 +556,4 @@ function ReservationForm() {
                   defaultChecked={i === 1}
                   className="peer sr-only"
                 />
-                <span className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border font-display text-lg transition peer-checked:border-foreground peer-checked:bg-foreground peer-checked:text-background hover:border-foreground/60">
-                  {g}
-                </span>
-              </label>
-            ))}
-          </div>
-        </div>
-        <div className="md:col-span-2">
-          <Label>Note (optional)</Label>
-          <textarea
-            name="note"
-            rows={3}
-            placeholder="Anniversary, working on a novel, etc."
-            className="mt-2 w-full resize-none border-0 border-b border-border bg-transparent py-2 text-base outline-none transition focus:border-foreground"
-          />
-        </div>
-      </div>
-      <button
-        type="submit"
-        disabled={status === "submitting"}
-        className="group mt-10 inline-flex w-full items-center justify-center gap-3 rounded-full bg-foreground px-8 py-4 text-sm font-medium uppercase tracking-[0.18em] text-background transition hover:bg-accent disabled:opacity-60 md:w-auto"
-      >
-        {status === "submitting" ? "Saving…" : "Confirm reservation"}
-        <span aria-hidden className="transition group-hover:translate-x-1">→</span>
-      </button>
-      {errorMsg && <p className="mt-3 text-xs text-red-600">{errorMsg}</p>}
-      <p className="mt-4 text-xs text-muted-foreground">
-        We'll hold your table for 10 minutes after the time you pick.
-      </p>
-    </form>
-  );
-}
-
-function Label({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
-      {children}
-    </span>
-  );
-}
-
-function Field({
-  label,
-  ...props
-}: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <label className="block">
-      <Label>{label}</Label>
-      <input
-        {...props}
-        className="mt-2 w-full border-0 border-b border-border bg-transparent py-2 text-base outline-none transition focus:border-foreground"
-      />
-    </label>
-  );
-}
-
-function ReviewWidget() {
-  const { data: settings } = useSettings();
-  const [rating, setRating] = useState(0);
-  const [hover, setHover] = useState(0);
-  const [submitted, setSubmitted] = useState(false);
-  const mapsUrl = settings?.google_maps_url || "";
-
-  const submit = async (value: number) => {
-    setRating(value);
-    setSubmitted(true);
-    try {
-      await supabase.from("reviews").insert({ rating: value });
-      track("review_submitted", null, String(value));
-    } catch {
-      // ignore
-    }
-  };
-
-  return (
-    <div className="w-full rounded-sm border border-border bg-card p-6 md:p-8">
-      <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Rate your visit</p>
-      <h3 className="mt-2 font-display text-2xl md:text-3xl">How was your stay?</h3>
-      <div className="mt-4 flex items-center gap-2">
-        {[1, 2, 3, 4, 5].map((v) => {
-          const active = (hover || rating) >= v;
-          return (
-            <button
-              key={v}
-              type="button"
-              onMouseEnter={() => setHover(v)}
-              onMouseLeave={() => setHover(0)}
-              onClick={() => submit(v)}
-              aria-label={`${v} star${v > 1 ? "s" : ""}`}
-              className={`text-3xl transition ${active ? "text-accent" : "text-muted-foreground/40"}`}
-            >
-              ★
-            </button>
-          );
-        })}
-      </div>
-      {submitted && rating >= 4 && (
-        <div className="mt-4 text-sm">
-          <p className="text-foreground">Thank you — we'd love it if you shared a kind word.</p>
-          {mapsUrl ? (
-            <a
-              href={mapsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-2 inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-xs uppercase tracking-[0.18em] text-background hover:bg-accent"
-            >
-              Leave a Google review →
-            </a>
-          ) : (
-            <p className="mt-2 text-xs text-muted-foreground">Google review link coming soon.</p>
-          )}
-        </div>
-      )}
-      {submitted && rating > 0 && rating < 4 && (
-        <p className="mt-4 text-sm text-muted-foreground">
-          Thank you for the honest feedback — we'll do better next time.
-        </p>
-      )}
-    </div>
-  );
-}
-
-function FloatingSocial() {
-  const { data: settings } = useSettings();
-  const ig = settings?.instagram_url || "";
-  const wa = settings?.whatsapp_url || "";
-  if (!ig && !wa) return null;
-  return (
-    <div className="fixed bottom-6 right-6 z-40 flex flex-col gap-3">
-      {wa && (
-        <a
-          href={wa}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={() => track("click_whatsapp")}
-          aria-label="Contact us on WhatsApp"
-          className="flex h-12 w-12 items-center justify-center rounded-full bg-[#25D366] text-white shadow-lg transition hover:scale-105"
-        >
-          <svg viewBox="0 0 24 24" className="h-6 w-6 fill-current" aria-hidden>
-            <path d="M20.5 3.5A11.8 11.8 0 0012.05 0C5.5 0 .2 5.3.2 11.85c0 2.1.55 4.15 1.6 5.95L0 24l6.35-1.65a11.85 11.85 0 005.7 1.45h.01c6.55 0 11.85-5.3 11.85-11.85 0-3.15-1.25-6.15-3.4-8.45zm-8.45 18.2h-.01a9.85 9.85 0 01-5-1.35l-.35-.2-3.75.95.95-3.65-.25-.4a9.85 9.85 0 01-1.5-5.2c0-5.45 4.45-9.9 9.95-9.9 2.65 0 5.15 1.05 7 2.9a9.85 9.85 0 012.9 7c0 5.45-4.45 9.85-9.95 9.85zm5.45-7.4c-.3-.15-1.75-.85-2-.95-.3-.1-.45-.15-.65.15-.2.3-.75.95-.9 1.15-.2.15-.35.2-.65.05-1.75-.9-2.9-1.55-4.05-3.5-.3-.55.3-.5.9-1.7.1-.2.05-.35-.05-.5s-.65-1.6-.9-2.2c-.25-.55-.5-.5-.65-.5h-.55c-.2 0-.5.05-.75.35-.25.3-1 1-1 2.4s1.05 2.8 1.2 3c.15.2 2 3.1 4.95 4.35 1.85.8 2.55.85 3.45.7.55-.05 1.75-.7 2-1.4.25-.7.25-1.3.15-1.4-.1-.1-.3-.15-.6-.3z"/>
-          </svg>
-        </a>
-      )}
-      {ig && (
-        <a
-          href={ig}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={() => track("click_instagram")}
-          aria-label="Follow us on Instagram"
-          className="flex h-12 w-12 items-center justify-center rounded-full text-white shadow-lg transition hover:scale-105"
-          style={{ background: "linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)" }}
-        >
-          <svg viewBox="0 0 24 24" className="h-6 w-6 fill-current" aria-hidden>
-            <path d="M12 2.2c3.2 0 3.6 0 4.85.07 1.17.05 1.8.25 2.23.42.56.22.96.48 1.38.9.42.42.68.82.9 1.38.17.43.37 1.06.42 2.23.06 1.25.07 1.65.07 4.85s0 3.6-.07 4.85c-.05 1.17-.25 1.8-.42 2.23-.22.56-.48.96-.9 1.38-.42.42-.82.68-1.38.9-.43.17-1.06.37-2.23.42-1.25.06-1.65.07-4.85.07s-3.6 0-4.85-.07c-1.17-.05-1.8-.25-2.23-.42a3.7 3.7 0 01-1.38-.9 3.7 3.7 0 01-.9-1.38c-.17-.43-.37-1.06-.42-2.23C2.2 15.6 2.2 15.2 2.2 12s0-3.6.07-4.85c.05-1.17.25-1.8.42-2.23.22-.56.48-.96.9-1.38.42-.42.82-.68 1.38-.9.43-.17 1.06-.37 2.23-.42C8.4 2.2 8.8 2.2 12 2.2zm0 1.8c-3.16 0-3.53.01-4.77.07-.95.04-1.46.2-1.8.34-.45.18-.78.39-1.12.73-.34.34-.55.67-.73 1.12-.13.34-.3.85-.34 1.8-.06 1.24-.07 1.6-.07 4.77s.01 3.53.07 4.77c.04.95.2 1.46.34 1.8.18.45.39.78.73 1.12.34.34.67.55 1.12.73.34.13.85.3 1.8.34 1.24.06 1.6.07 4.77.07s3.53-.01 4.77-.07c.95-.04 1.46-.2 1.8-.34.45-.18.78-.39 1.12-.73.34-.34.55-.67.73-1.12.13-.34.3-.85.34-1.8.06-1.24.07-1.6.07-4.77s-.01-3.53-.07-4.77c-.04-.95-.2-1.46-.34-1.8a3 3 0 00-.73-1.12 3 3 0 00-1.12-.73c-.34-.13-.85-.3-1.8-.34C15.53 4.01 15.16 4 12 4zm0 3.04a4.96 4.96 0 110 9.92 4.96 4.96 0 010-9.92zm0 1.8a3.16 3.16 0 100 6.32 3.16 3.16 0 000-6.32zm5.16-2a1.16 1.16 0 110 2.33 1.16 1.16 0 010-2.33z"/>
-          </svg>
-        </a>
-      )}
-    </div>
-  );
-}
-
-function Footer() {
-  return (
-    <footer className="border-t border-border py-12">
-      <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-6 px-6 md:flex-row md:items-center md:px-10">
-        <div className="flex items-baseline gap-3">
-          <span className="font-display text-lg">Coffee Stay</span>
-          <span className="text-xs uppercase tracking-[0.25em] text-muted-foreground">
-            Brooklyn — since 2021
-          </span>
-        </div>
-        <div className="flex flex-wrap items-center gap-6 text-sm text-muted-foreground">
-          <a href="#menu" className="transition hover:text-foreground">Menu</a>
-          <a href="#story" className="transition hover:text-foreground">Story</a>
-          <a href="#visit" className="transition hover:text-foreground">Visit</a>
-          <a
-            href="/admin"
-            className="inline-flex items-center gap-2 rounded-full border border-foreground/80 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.2em] text-foreground transition hover:bg-foreground hover:text-background"
-          >
-            Administrative panel
-            <span aria-hidden>→</span>
-          </a>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          © {new Date().getFullYear()} Coffee Stay. Made slow.
-        </p>
-      </div>
-      <img src={pour} alt="" className="hidden" aria-hidden />
-    </footer>
-  );
-}
+                <span className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border font-display t
